@@ -33,6 +33,9 @@ namespace RideSharing.Application.Services
             Guard.Against.NullOrWhiteSpace(dropoff, nameof(dropoff));
             Guard.Against.NegativeOrZero(distanceKm, nameof(distanceKm));
 
+            // Reload ensures this instance sees rides and balances written by other running instances.
+            _unitOfWork.Reload();
+
             var passenger = GetPassengerOrThrow(passengerId);
             var fare = _paymentService.CalculateFare(distanceKm);
 
@@ -75,6 +78,9 @@ namespace RideSharing.Application.Services
             Guard.Against.Default(rideId, nameof(rideId));
             Guard.Against.Default(driverId, nameof(driverId));
 
+            // Reload so this driver sees ride requests posted by passenger instances.
+            _unitOfWork.Reload();
+
             var ride = GetRideOrThrow(rideId);
             var driver = GetDriverOrThrow(driverId);
 
@@ -114,6 +120,9 @@ namespace RideSharing.Application.Services
         {
             Guard.Against.Default(rideId, nameof(rideId));
 
+            // Reload so the driver instance sees the accepted ride written by another instance.
+            _unitOfWork.Reload();
+
             var ride = GetRideOrThrow(rideId);
 
             if (ride.Status != RideStatus.Accepted)
@@ -139,19 +148,32 @@ namespace RideSharing.Application.Services
         #region Queries
 
         /// <summary>Returns all rides currently awaiting a driver.</summary>
-        public List<Ride> GetOpenRequests() => _unitOfWork.Rides.GetOpenRequests();
+        public List<Ride> GetOpenRequests()
+        {
+            _unitOfWork.Reload();
+            return _unitOfWork.Rides.GetOpenRequests();
+        }
 
         /// <summary>Returns the ride history for a specific passenger.</summary>
         public List<Ride> GetRideHistoryForPassenger(Guid passengerId)
-            => _unitOfWork.Rides.GetRidesForPassenger(passengerId);
+        {
+            _unitOfWork.Reload();
+            return _unitOfWork.Rides.GetRidesForPassenger(passengerId);
+        }
 
         /// <summary>Returns all available drivers using LINQ filtering.</summary>
         public List<Driver> GetAvailableDrivers()
-            => _unitOfWork.Drivers.GetAvailableDrivers();
+        {
+            _unitOfWork.Reload();
+            return _unitOfWork.Drivers.GetAvailableDrivers();
+        }
 
         /// <summary>Returns the active ride for a driver, or null if none.</summary>
         public Ride? GetActiveRideForDriver(Guid driverId)
-            => _unitOfWork.Rides.GetActiveRideForDriver(driverId);
+        {
+            _unitOfWork.Reload();
+            return _unitOfWork.Rides.GetActiveRideForDriver(driverId);
+        }
 
         #endregion
 

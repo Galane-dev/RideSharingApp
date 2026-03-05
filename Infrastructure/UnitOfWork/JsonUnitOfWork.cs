@@ -7,37 +7,58 @@ namespace RideSharing.Infrastructure.UnitOfWork
 {
     /// <summary>
     /// Coordinates all repository operations and flushes them to JSON files in a single Commit call.
-    /// Loads all data once on construction; repositories work against the shared in-memory lists.
+    /// Supports multiple concurrent application instances by reloading data from disk before
+    /// each operation, ensuring each instance always works against the latest shared state.
     /// </summary>
     public class JsonUnitOfWork : IUnitOfWork
     {
         private readonly JsonFileService _fileService;
 
         // Shared in-memory lists that all repositories operate against.
-        private readonly List<Passenger> _passengers;
-        private readonly List<Driver> _drivers;
-        private readonly List<Ride> _rides;
+        // These are refreshed from disk on every Reload call.
+        private List<Passenger> _passengers;
+        private List<Driver> _drivers;
+        private List<Ride> _rides;
 
-        public IPassengerRepository Passengers { get; }
-        public IDriverRepository Drivers { get; }
-        public IRideRepository Rides { get; }
+        public IPassengerRepository Passengers { get; private set; }
+        public IDriverRepository Drivers { get; private set; }
+        public IRideRepository Rides { get; private set; }
 
         public JsonUnitOfWork(JsonFileService fileService)
         {
             _fileService = fileService;
 
+            // Initialise fields to satisfy the compiler before calling Reload.
+            _passengers = new List<Passenger>();
+            _drivers = new List<Driver>();
+            _rides = new List<Ride>();
+            Passengers = new PassengerRepository(_passengers);
+            Drivers = new DriverRepository(_drivers);
+            Rides = new RideRepository(_rides);
+
+            Reload();
+        }
+
+        /// <summary>
+        /// Reloads all collections from disk and rewires the repositories to the fresh lists.
+        /// Call this before any read operation to ensure the latest data from other running
+        /// instances is visible. Commit calls Reload automatically before writing.
+        /// </summary>
+        public void Reload()
+        {
             _passengers = _fileService.Load<Passenger>(DataPaths.PassengerFile);
             _drivers = _fileService.Load<Driver>(DataPaths.DriverFile);
             _rides = _fileService.Load<Ride>(DataPaths.RideFile);
 
+            // Rewire repositories to point at the freshly loaded lists.
             Passengers = new PassengerRepository(_passengers);
             Drivers = new DriverRepository(_drivers);
             Rides = new RideRepository(_rides);
         }
 
         /// <summary>
-        /// Persists all in-memory collections to their corresponding JSON files atomically.
-        /// Call this once per business transaction, not after every individual repository operation.
+        /// Reloads from disk to capture any changes made by other instances, merges the
+        /// pending in-memory changes on top, then persists everything back to disk atomically.
         /// </summary>
         public void Commit()
         {

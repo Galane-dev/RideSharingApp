@@ -13,6 +13,12 @@ namespace RideSharing.Application.Interfaces
         IRideRepository Rides { get; }
 
         /// <summary>
+        /// Reloads all collections from disk and rewires repositories to the fresh data.
+        /// Call before any read operation when multiple application instances may be running.
+        /// </summary>
+        void Reload();
+
+        /// <summary>
         /// Persists all pending changes across every repository to the underlying storage.
         /// </summary>
         void Commit();
